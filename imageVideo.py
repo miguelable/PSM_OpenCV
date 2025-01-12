@@ -36,9 +36,9 @@ def close_dilate_mask(mask):
 def get_red_mask(hsv_image):
     # H = 125, S = 20, V = 0, H1 = 179, S1 = 255, V1 = 255
     # H = 120, S = 40, V = 100, H1 = 170, S1 = 255, V1 = 240
-    lower_red1 = np.array([0, 20, 0])
-    lower_red2 = np.array([125, 20, 0])
-    upper_red1 = np.array([8, 255, 255])
+    lower_red1 = np.array([0, 50, 50])
+    lower_red2 = np.array([10, 255, 255])
+    upper_red1 = np.array([150, 50, 50])
     upper_red2 = np.array([179, 255, 255])
     mask_red1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
@@ -49,8 +49,8 @@ def get_red_mask(hsv_image):
 def get_green_mask(hsv_image):
     # H = 50, S = 40, V = 0, H1 = 110, S1 = 255, V1 = 160
     # H = 50, S = 50, V = 0, H1 = 90, S1 = 255, V1 = 190
-    lower_green = np.array([30, 40, 0])
-    upper_green = np.array([90, 255, 190])
+    lower_green = np.array([30, 20, 20])
+    upper_green = np.array([90, 255, 255])
     mask_green = cv2.inRange(hsv_image, lower_green, upper_green)
     # mask_green = close_dilate_mask(mask_green)
     return mask_green
@@ -129,6 +129,9 @@ def match_contours(red_contours_info, green_contours_info):
             )
             # Descartar si la distancia excede 3.5 veces la anchura del contorno rojo
             if center_distance > 3.2 * red_contour['width']:
+                continue
+            # Descartar si la distancia es menor a 2.8 veces la anchura del contorno rojo
+            if center_distance < 2.8 * red_contour['width']:
                 continue
             # Calcular diferencia de ángulo
             angle_diff = abs(red_contour['angle'] - green_contour['angle'])
@@ -420,70 +423,74 @@ def get_image_decoded(frame):
     imagen_con_bounding_box = dibujar_bounding_box(matched_contours, frame, numbers)
     return imagen_con_bounding_box
 
-# try:
-#     # Conectar al flujo de video
-#     stream = requests.get(url, stream=True)
-#     if stream.status_code == 200:
-#         byte_data = b""  # Datos binarios acumulados
+# Obtención de imagenes a traves del microcontrolador
 
-#         # Leer el flujo MJPEG
-#         for chunk in stream.iter_content(chunk_size=1024):
-#             byte_data += chunk
-#             start = byte_data.find(b'\xff\xd8')  # Inicio de imagen JPEG
-#             end = byte_data.find(b'\xff\xd9')    # Fin de imagen JPEG
+try:
+    # Conectar al flujo de video
+    stream = requests.get("http://10.220.151.99:81/", stream=True)
+    if stream.status_code == 200:
+        byte_data = b""  # Datos binarios acumulados
 
-#             if start != -1 and end != -1:
-#                 # Extraer el fotograma JPEG
-#                 jpg_data = byte_data[start:end+2]
-#                 byte_data = byte_data[end+2:]
+        # Leer el flujo MJPEG
+        for chunk in stream.iter_content(chunk_size=1024):
+            byte_data += chunk
+            start = byte_data.find(b'\xff\xd8')  # Inicio de imagen JPEG
+            end = byte_data.find(b'\xff\xd9')    # Fin de imagen JPEG
 
-#                 # Convertir JPEG en imagen OpenCV
-#                 img_array = np.frombuffer(jpg_data, dtype=np.uint8)
-#                 frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            if start != -1 and end != -1:
+                # Extraer el fotograma JPEG
+                jpg_data = byte_data[start:end+2]
+                byte_data = byte_data[end+2:]
 
-#                 # Decodificar la imagen
-#                 imagen_decodificada = get_image_decoded(frame)
+                # Convertir JPEG en imagen OpenCV
+                img_array = np.frombuffer(jpg_data, dtype=np.uint8)
+                frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
-#                 # Mostrar el fotograma
-#                 cv2.imshow("ESP32-CAM Video", imagen_decodificada)
+                # Decodificar la imagen
+                imagen_decodificada = get_image_decoded(frame)
 
-#                 # Salir con la tecla 'q'
-#                 if cv2.waitKey(1) & 0xFF == ord('q'):
-#                     break
-#     else:
-#         print(f"Error al conectarse al flujo MJPEG: {stream.status_code}")
-# except Exception as e:
-#     print(f"Error: {e}")
+                # Mostrar el fotograma
+                cv2.imshow("ESP32-CAM Video", imagen_decodificada)
 
-# finally:
-#     # Cerrar todas las ventanas
-#     cv2.destroyAllWindows()
+                # Salir con la tecla 'q'
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+    else:
+        print(f"Error al conectarse al flujo MJPEG: {stream.status_code}")
+except Exception as e:
+    print(f"Error: {e}")
+
+finally:
+    # Cerrar todas las ventanas
+    cv2.destroyAllWindows()
 
 
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Cannot open camera")
-    exit()
+#  Descomentar para usar la camara en vez del microcontrolador
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
-    #Decodificar la imagen
-    imagen_decodificada = get_image_decoded(frame)
+# cap = cv2.VideoCapture(0)
+# if not cap.isOpened():
+#     print("Cannot open camera")
+#     exit()
 
-    # image_hsv = convert_image_to_hsv(frame)
-    # mask_red = get_red_mask(image_hsv)
-    # mask_green = get_green_mask(image_hsv)
+# while True:
+#     ret, frame = cap.read()
+#     if not ret:
+#         print("Can't receive frame (stream end?). Exiting ...")
+#         break
+#     #Decodificar la imagen
+#     imagen_decodificada = get_image_decoded(frame)
 
-    # image_segmented_red = apply_mask_to_image(frame, mask_red)
-    # image_segmented_green = apply_mask_to_image(frame, mask_green)
+#     # image_hsv = convert_image_to_hsv(frame)
+#     # mask_red = get_red_mask(image_hsv)
+#     # mask_green = get_green_mask(image_hsv)
 
-    # Mostrar el fotograma
-    cv2.imshow("ESP32-CAM Video", imagen_decodificada)
-    if cv2.waitKey(1) == ord('q'):
-        break
+#     # image_segmented_red = apply_mask_to_image(frame, mask_red)
+#     # image_segmented_green = apply_mask_to_image(frame, mask_green)
 
-cap.release()
-cv2.destroyAllWindows()
+#     # Mostrar el fotograma
+#     cv2.imshow("ESP32-CAM Video", imagen_decodificada)
+#     if cv2.waitKey(1) == ord('q'):
+#         break
+
+# cap.release()
+# cv2.destroyAllWindows()
